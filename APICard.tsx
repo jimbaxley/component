@@ -2,6 +2,11 @@ import { motion } from "framer-motion"
 import { useEffect, useState, startTransition, type CSSProperties } from "react"
 import { addPropertyControls, ControlType, Data } from "framer"
 
+const isCanvas =
+    (Data as any)?.isCanvasEnvironment ||
+    (typeof window !== "undefined" &&
+        window.location.pathname.includes("/canvas"))
+
 interface FieldMapping {
     sourceField: string
     targetField: string
@@ -254,6 +259,7 @@ function extractCodaValue(obj: any): string {
 interface APICardProps {
     apiUrl: string
     workerUrl: string
+    useDemoData: boolean
     columnsUrl: string
     limit: number
     collection: any
@@ -290,7 +296,7 @@ interface APICardProps {
 export default function APICard(props: APICardProps) {
     const {
         apiUrl,
-        columnsUrl,
+        useDemoData,
         limit,
         layoutType,
         columnsPerRow,
@@ -309,8 +315,44 @@ export default function APICard(props: APICardProps) {
     const workerEndpoint =
         props.workerUrl || "https://c2c-published.jim-d63.workers.dev/"
 
+    const demoRecords = [
+        {
+            id: 1,
+            Name: "Demo Event 1",
+            Type: "Meeting",
+            Location: "Online",
+            Description: "This is a demo event.",
+            Start: "2025-08-01T10:00:00Z",
+            "Start Time": "2025-08-01T10:00:00Z",
+            Graphic: "",
+            "Signup URL": "https://example.com/signup",
+            buttonText: "Sign Up",
+            values: {}, // for compatibility
+        },
+        {
+            id: 2,
+            Name: "Demo Event 2",
+            Type: "Canvass",
+            Location: "HQ",
+            Description: "Another demo event.",
+            Start: "2025-08-02T14:00:00Z",
+            "Start Time": "2025-08-02T14:00:00Z",
+            Graphic: "",
+            "Signup URL": "https://example.com/signup2",
+            buttonText: "Join",
+            values: {},
+        },
+    ]
+
     // Fetch columns first, then data
     useEffect(() => {
+        if (props.useDemoData) {
+            setRecords(demoRecords)
+            setLoading(false)
+            setError(null)
+            return
+        }
+
         const fetchData = async () => {
             if (!apiUrl) return
 
@@ -327,11 +369,6 @@ export default function APICard(props: APICardProps) {
                     )
                 const result = await response.json()
 
-                if (!response.ok)
-                    throw new Error(
-                        `API request failed with status ${response.status}`
-                    )
-
                 let fetchedRecords = Array.isArray(result)
                     ? result
                     : result.data ||
@@ -340,7 +377,6 @@ export default function APICard(props: APICardProps) {
                       result.results ||
                       []
 
-                // Sort by start field (ascending)
                 fetchedRecords = fetchedRecords.sort((a, b) => {
                     const aDate = new Date(
                         a.values?.[props.dateFieldMapping] ||
@@ -352,19 +388,15 @@ export default function APICard(props: APICardProps) {
                     )
                     return aDate.getTime() - bDate.getTime()
                 })
-                // Apply limit if specified
                 if (limit > 0) {
                     fetchedRecords = fetchedRecords.slice(0, limit)
                 }
-
-                console.log("Records retrieved:", fetchedRecords.length)
 
                 startTransition(() => {
                     setRecords(fetchedRecords)
                     setLoading(false)
                 })
             } catch (err) {
-                console.error("API fetch error:", err)
                 startTransition(() => {
                     setError(
                         err instanceof Error
@@ -379,7 +411,7 @@ export default function APICard(props: APICardProps) {
         if (typeof window !== "undefined") {
             fetchData()
         }
-    }, [props.apiUrl, props.workerUrl, limit])
+    }, [props.apiUrl, props.workerUrl, limit, props.useDemoData])
 
     const [selectedType, setSelectedType] = useState("ALL")
     const [hoveredCard, setHoveredCard] = useState<number | null>(null)
@@ -389,14 +421,19 @@ export default function APICard(props: APICardProps) {
     } | null>(null)
     const [tooltipContent, setTooltipContent] = useState<string | null>(null)
 
-    const filteredRecords =
-        selectedType === "ALL"
+const filteredRecords =
+    props.useDemoData
+        ? records // Show all demo records, ignore filter
+        : selectedType === "ALL"
             ? records
             : records.filter((record) => {
                   const typeField =
                       record.values?.[props.categoryFieldMapping] ||
                       record[props.categoryFieldMapping]
-                  return typeField?.toLowerCase() === selectedType.toLowerCase()
+                  return (
+                      typeField &&
+                      typeField.toLowerCase() === selectedType.toLowerCase()
+                  )
               })
 
     const renderCard = (record: any, index: number) => {
@@ -455,12 +492,12 @@ export default function APICard(props: APICardProps) {
 
         return (
             <div
-                key={index}
+                //key={index}
                 style={{
-                    backgroundColor: "#FFFFFF",
+                    backgroundColor: "#F7F7F7",
                     borderRadius: 12,
                     overflow: "hidden",
-                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
                     display: "flex",
                     flexDirection: "column",
                     minWidth: layoutType === "auto" ? minCardWidth : undefined,
@@ -767,26 +804,40 @@ export default function APICard(props: APICardProps) {
 
             {!loading && !error && filteredRecords.length > 0 && (
                 <div style={gridStyle}>
-                    {filteredRecords.map((record, index) => (
-                        <motion.div
-                            key={
-                                record.id
-                                    ? record.id
-                                    : `${record[props.titleFieldMapping] || "card"}-${record[props.categoryFieldMapping] || "type"}-${index}`
-                            }
-                            layout // <-- enables shuffle animation
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            transition={{
-                                type: "spring",
-                                stiffness: 400,
-                                damping: 30,
-                            }}
-                        >
-                            {renderCard(record, index)}
-                        </motion.div>
-                    ))}
+  
+
+{filteredRecords.map((record, index) =>
+    isCanvas ? (
+        <div
+            key={
+                record.id
+                    ? record.id
+                    : `${record[props.titleFieldMapping] || "card"}-${record[props.categoryFieldMapping] || "type"}-${index}`
+            }
+        >
+            {renderCard(record, index)}
+        </div>
+    ) : (
+        <motion.div
+            key={
+                record.id
+                    ? record.id
+                    : `${record[props.titleFieldMapping] || "card"}-${record[props.categoryFieldMapping] || "type"}-${index}`
+            }
+            layout
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{
+                type: "spring",
+                stiffness: 400,
+                damping: 30,
+            }}
+        >
+            {renderCard(record, index)}
+        </motion.div>
+    )
+)}
                     {/* Tooltip rendered at root level */}
                     {hoveredCard !== null && tooltipPos && tooltipContent && (
                         <div
@@ -828,6 +879,12 @@ addPropertyControls(APICard, {
         type: ControlType.String,
         title: "API URL",
         defaultValue: "https://jsonplaceholder.typicode.com/posts",
+    },
+
+    useDemoData: {
+        type: ControlType.Boolean,
+        title: "Use Demo Data",
+        defaultValue: true,
     },
 
     limit: {
