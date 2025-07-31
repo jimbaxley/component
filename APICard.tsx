@@ -710,6 +710,20 @@ export default function APICard(props: APICardProps) {
                 >
                     <div
                         style={{
+                            ...props.cardFont,
+                            display: "flex",
+                            alignItems: "center",
+                            marginBottom: 8,
+                            fontSize: 14,
+                            color: "#666",
+                        }}
+                    >
+                        <span style={{ marginRight: 8 }}>
+                            Loading the latest signups!
+                        </span>
+                    </div>
+                    <div
+                        style={{
                             width: 40,
                             height: 40,
                             borderRadius: "50%",
